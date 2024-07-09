@@ -15,14 +15,15 @@ from typing import Any, Callable
 
 class Client:
 
-    VERSION = "1.2.1"
-
-    CONFIG_PATH = Path("config") / "config_connection.json"
+    VERSION = "1.3.0"
 
     CMD_TYPE = dict[str, Any]
 
-    def __init__(self, use_ssl: bool = True):
-        with self.CONFIG_PATH.open("r") as fh:
+    def __init__(self, path_config: str | Path = None, use_ssl: bool = True):
+        if path_config is None:
+            path_config = Path("config") / "config_connection.json"
+
+        with open(path_config) as fh:
             config = json.load(fh)
 
         self.client = config["client_address"]

@@ -5,6 +5,7 @@ Communication adheres to a defined communication protocol, see `README.md`.
 
 import asyncio
 import json
+import os
 import ssl
 
 # time.time() in micropython has no sub-second precision
@@ -59,9 +60,21 @@ def json_decorator(fun):
     return wrapper
 
 
+def update_file(file_path: str, content: str):
+    # if file already exists, rename it for backup
+    try:
+        os.rename(file_path, "_" + file_path)
+    except OSError:
+        # nothing to do if file doesn't exist
+        pass
+
+    with open(file_path, "w") as f:
+        f.write(content)
+
+
 class GPIOControlServerBase:
 
-    _VERSION = "1.12.0"
+    _VERSION = "1.13.0"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5
@@ -202,7 +215,10 @@ class GPIOControlServerBase:
     def sleep(self, time_ms: int, deep: bool):
         pass
 
-    async def reset_after_timeout(self, soft: bool, timeout: float = 1.0):
+    def reset_after_timeout(self, soft: bool, timeout_ms: int = 1000):
+        pass
+
+    def reset(self, soft: bool):
         pass
 
     @staticmethod
@@ -251,7 +267,7 @@ class GPIOControlServerBase:
         pass
 
     def _action_reset(self, command: dict):
-        asyncio.create_task(self.reset_after_timeout(soft=False))
+        self.reset_after_timeout(soft=False)
 
     def _action_sleep(self, command: dict):
         time_ms, deep = self._validate_command(command, ("time_ms", int), ("deep", int))
@@ -274,6 +290,27 @@ class GPIOControlServerBase:
 
     def _action_list_actions(self, command: dict):
         command["actions"] = list(self._ACTIONS.keys())
+
+    def _decompress(self, file_contents: str) -> str:
+        pass
+
+    def _action_update(self, command: dict):
+        files, compress = self._validate_command(
+            command, ("files", dict), ("compress", bool)
+        )
+        # decompress
+        if compress:
+            files = {k: self._decompress(v) for k, v in files.items()}
+
+        # signal update is in progress
+        with open("update.txt", "w") as f:
+            f.write(",".join(files.keys()))
+
+        for k, v in files.items():
+            print("writing file", k, len(v))
+            update_file(k, v)
+
+        self.reset_after_timeout(soft=False)
 
     @json_decorator
     async def handle_command(self, command: dict[str]) -> dict[str]:
@@ -307,6 +344,7 @@ class GPIOControlServerBase:
         "get_info": _action_get_info,
         "sleep": _action_sleep,
         "list_actions": _action_list_actions,
+        "update": _action_update,
     }
 
 

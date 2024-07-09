@@ -1,12 +1,14 @@
-import asyncio
 import gc
 import json
 import os
+from io import BytesIO
 from time import sleep
 
 import machine
 import network
+from deflate import DeflateIO
 from server_base import GPIOControlServerBase, GPIOPinNotSetupError
+from ubinascii import a2b_base64
 
 
 class GPIOControlServerPicoW(GPIOControlServerBase):
@@ -57,6 +59,10 @@ class GPIOControlServerPicoW(GPIOControlServerBase):
 
         return pin
 
+    def _decompress(self, file_contents: str) -> str:
+        with DeflateIO(BytesIO(a2b_base64(file_contents))) as f:
+            return f.read().decode()
+
     def setup_pin(self, pin: int, mode):
         mode = {"input": machine.Pin.IN, "output": machine.Pin.OUT}[mode]
         pin = self.__process_pin(pin, check_setup=False)
@@ -99,11 +105,14 @@ class GPIOControlServerPicoW(GPIOControlServerBase):
         print("woke up from sleep")
         self._event_continuous_blink.set()
 
-    async def reset_after_timeout(self, soft: bool, timeout: float = 1.0):
-        await asyncio.sleep(timeout)
+    def reset_after_timeout(self, soft: bool, timeout_ms: int = 1000):
         if soft:
             print("soft resetting...")
-            machine.soft_reset()
+            fun = machine.soft_reset
         else:
             print("resetting...")
-            machine.reset()
+            fun = machine.reset
+
+        machine.Timer().init(
+            period=timeout_ms, mode=machine.Timer.ONE_SHOT, callback=lambda t: fun()
+        )

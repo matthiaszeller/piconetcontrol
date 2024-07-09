@@ -12,10 +12,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
 
+from update import get_local_version, get_update_files
+
 
 class Client:
 
-    VERSION = "1.4.0"
+    VERSION = "1.5.0"
 
     CMD_TYPE = dict[str, Any]
 
@@ -131,21 +133,73 @@ class Client:
         fun_validate: Callable[[CMD_TYPE], bool],
         dt: float,
         timeout: float,
+        allow_connection_refused: bool = False,
     ) -> bool:
         # TODO: refactor this with send_commands to avoid code redundancy
         assert dt > 0 and timeout > 0
-        cmd = json.dumps(cmd).encode()
-        with self._create_socket() as sock:
-            start = time.time()
-            while time.time() - start < timeout:
-                response = self._send_single_command(sock, cmd)
+        try:
+            with self._create_socket() as sock:
+                start = time.time()
+                while time.time() - start < timeout:
+                    response = self._send_single_command(sock, cmd)
 
-                if fun_validate(response):
-                    return True
+                    if fun_validate(response):
+                        return True
 
+                    time.sleep(dt)
+        except ConnectionRefusedError:
+            if allow_connection_refused:
                 time.sleep(dt)
+                return self.poll_command_response(
+                    cmd, fun_validate, dt, timeout, allow_connection_refused
+                )
+
+            raise
 
         return False
+
+    def update_server(self, compress_transfer: bool = True):
+        info = self.send_command(action="get_info")["info"]
+        print("Server info:")
+        print(json.dumps(info, indent=2))
+        if "pico" not in info["board"].lower():
+            raise NotImplementedError("Server is not running on a Pico board")
+
+        server_version = self.send_command(action="get_version")["version"]
+        print("Server version:", server_version)
+
+        local_version = get_local_version()
+        if local_version == server_version:
+            print("Server is up to date")
+            return
+        print("Local version:", local_version)
+
+        files: dict = get_update_files(compress=compress_transfer)
+        print("Files to update:", list(files.keys()))
+        sumchar = sum(map(len, files.values()))
+        print("Payload size:", sumchar, "bytes")
+
+        self.send_command(action="update", files=files, compress=compress_transfer)
+        print("Waiting for server to restart")
+        time.sleep(3)
+        print("Attempting to reconnect")
+        connected = self.poll_command_response(
+            dict(action="ping"),
+            lambda x: x.get("action") == "ping",
+            1,
+            10,
+            allow_connection_refused=True,
+        )
+        if not connected:
+            print("Could not connect to server after update")
+            return
+
+        new_version = self.send_command(action="get_version")["version"]
+        if new_version != local_version:
+            print("Update failed, current server version:", new_version)
+            return
+
+        print("Server updated successfully")
 
 
 def main(args):
@@ -153,6 +207,10 @@ def main(args):
     client = Client(use_ssl=use_ssl)
 
     assert not (args.command and args.file), "Cannot send both a command and a file"
+
+    if args.update:
+        client.update_server()
+        return
 
     if args.command:
         res = client.send_commands(args.command, timeout=args.timeout)
@@ -214,6 +272,11 @@ if __name__ == "__main__":
         type=float,
         default=3.0,
         help="TCP socket timeout in seconds (for each command)",
+    )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update server and ignore other arguments",
     )
     args = parser.parse_args()
     print(args)

@@ -1,0 +1,34 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0  # Use the latest version
+    hooks:
+    -   id: trailing-whitespace
+    -   id: check-yaml
+    -   id: end-of-file-fixer
+    -   id: check-added-large-files
+
+-   repo: https://github.com/psf/black
+    rev: 24.3.0  # Use the latest version
+    hooks:
+    -   id: black
+        name: black - Firewall app (Poetry)
+        types: [python]
+
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2  # Use the latest version
+    hooks:
+    -   id: isort
+        name: isort - Firewall app (Poetry)
+        types: [python]
+        args: ["--profile", "black"] # REQUIRED, otherwise might have infinite loop
+                                     # because of black-isort disagreement
+
+-   repo: https://github.com/pycqa/flake8
+    rev: 7.0.0  # Use the latest version
+    hooks:
+    -   id: flake8
+        name: flake8 - Firewall app (Poetry)
+        args: [
+            '--max-line-length=110',
+            '--ignore=E203,W503'  # black compatibility
+        ]

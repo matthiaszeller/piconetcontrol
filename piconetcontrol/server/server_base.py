@@ -41,11 +41,13 @@ def json_decorator(fun):
                 res = await fun(*args, **kwargs)
             except Exception as e:
                 res = dic.copy()
+                print("error in function", fun.__name__, e)
                 res["error"] = e
 
         # MicroPython throws ValueError, Python a JSONDecodeError
         # but JSONDecodeError is a subclass of ValueError
         except ValueError as e:
+            print("error decoding JSON", e)
             res = {"error": e}
 
         if "error" in res:
@@ -59,7 +61,7 @@ def json_decorator(fun):
 
 class GPIOControlServerBase:
 
-    _VERSION = "1.11.1"
+    _VERSION = "1.12.0"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5
@@ -153,16 +155,24 @@ class GPIOControlServerBase:
         print("agent connected", reader.get_extra_info("peername"))
         task_blink = asyncio.create_task(self.blink_led_async(0.020, 100000, 0.1))
         try:
+            buffer = bytearray()
             while True:
                 data = await reader.read(1024)
                 if not data:
                     # No data means the client has closed the connection
                     break
 
-                print("received data", data)
-                response = await self.handle_command(data.decode())
-                writer.write(response.encode())
-                await writer.drain()
+                buffer.extend(data)
+
+                # check if we have received a full command
+                if data.endswith(b"\n"):
+                    print("received data", buffer)
+                    response = await self.handle_command(buffer.decode())
+                    writer.write(response.encode())
+                    await writer.drain()
+                    # exit loop after sending response
+                    break
+
         finally:
             task_blink.cancel()
             writer.close()

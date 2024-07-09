@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 
 
 def read_package_metadata(
-    package_path: str | Path = "src/piconetcontrol",
+    package_path: str | Path = None,
 ) -> dict[str, str]:
     def parse_line(line: str) -> tuple[str, str] | None:
         assignment = line.split("=", 1)
@@ -14,7 +14,11 @@ def read_package_metadata(
             value = value.strip().strip("'\"")
             return var, value
 
-    with open(Path(package_path) / "__init__.py") as f:
+    if package_path is None:
+        package_path = Path(__file__).parent
+        package_path = package_path / package_path.name
+
+    with open(package_path / "__init__.py") as f:
         content = f.read()
 
     fields = dict()

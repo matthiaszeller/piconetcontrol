@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 class Client:
 
-    VERSION = "1.3.0"
+    VERSION = "1.4.0"
 
     CMD_TYPE = dict[str, Any]
 
@@ -56,7 +56,8 @@ class Client:
             sock.settimeout(timeout)
 
             command["time_sent"] = time.time_ns()
-            command = json.dumps(command)
+            # Add linebreak to signify end of data packet
+            command = json.dumps(command) + "\n"
             logging.debug(f"sending command {command}")
             sock.sendall(command.encode())
             response = self._receive_response(sock, raise_exception)
@@ -71,8 +72,16 @@ class Client:
         return response
 
     def _receive_response(self, sock: socket.socket, raise_exception: bool) -> CMD_TYPE:
-        response = sock.recv(1024).decode()
-        response = json.loads(response)
+        buffer = bytearray()
+        while True:
+            data = sock.recv(1024)
+            if not data:
+                # means server closed the connection
+                break
+
+            buffer.extend(data)
+
+        response = json.loads(buffer.decode())
         response["time_responded"] = time.time_ns()
         if "error" in response:
             logfun = logging.critical if raise_exception else logging.error
@@ -146,11 +155,11 @@ def main(args):
     assert not (args.command and args.file), "Cannot send both a command and a file"
 
     if args.command:
-        res = client.send_commands(args.command)
+        res = client.send_commands(args.command, timeout=args.timeout)
     elif args.file:
         with args.file as f:
             commands = json.load(f)
-        res = client.send_commands(commands)
+        res = client.send_commands(commands, timeout=args.timeout)
     else:
         res = client.send_ping()
 
@@ -199,6 +208,12 @@ if __name__ == "__main__":
         type=argparse.FileType("r"),
         help="File containing commands to send to the server",
         required=False,
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=3.0,
+        help="TCP socket timeout in seconds (for each command)",
     )
     args = parser.parse_args()
     print(args)

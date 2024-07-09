@@ -43,8 +43,9 @@ def json_decorator(fun):
                 res = dic.copy()
                 res["error"] = e
 
-        # MicroPython throws ValueError
-        except (json.JSONDecodeError, ValueError) as e:
+        # MicroPython throws ValueError, Python a JSONDecodeError
+        # but JSONDecodeError is a subclass of ValueError
+        except ValueError as e:
             res = {"error": e}
 
         if "error" in res:
@@ -58,7 +59,7 @@ def json_decorator(fun):
 
 class GPIOControlServerBase:
 
-    _VERSION = "1.11.0"
+    _VERSION = "1.11.1"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5

@@ -57,19 +57,28 @@ def json_decorator(fun):
 
 class GPIOControlServerBase:
 
-    _VERSION = "1.9.3"
+    _VERSION = "1.10.0"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5
 
-    def __init__(self, use_ssl: bool = True):
+    def __init__(
+        self,
+        path_wifi_credentials: str = None,
+        path_ssl_cert: str = None,
+        path_ssl_key: str = None,
+    ):
         # server settings
-        with open("config/config_connection.json", "r") as fh:
+        with open(path_wifi_credentials, "r") as fh:
             cfg = json.load(fh)
         self.connection_port = cfg["port"]
-        if use_ssl:
+
+        assert (path_ssl_cert is None) == (
+            path_ssl_key is None
+        ), "both or none of ssl_cert and ssl_key must be provided"
+        if path_ssl_cert:
             self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            self.ssl_context.load_cert_chain("config/ec_cert.der", "config/ec_key.der")
+            self.ssl_context.load_cert_chain(path_ssl_cert, path_ssl_key)
         else:
             self.ssl_context = None
 

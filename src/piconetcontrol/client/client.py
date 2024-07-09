@@ -193,11 +193,11 @@ if __name__ == "__main__":
         help="Command set to server. If not sent, sends a ping",
     )
     parser.add_argument(
-        '-f',
-        '--file',
-        type=argparse.FileType('r'),
-        help='File containing commands to send to the server',
-        required=False
+        "-f",
+        "--file",
+        type=argparse.FileType("r"),
+        help="File containing commands to send to the server",
+        required=False,
     )
     args = parser.parse_args()
     print(args)

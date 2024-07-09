@@ -1,1 +1,5 @@
-from server import GPIOControlServerPicoW, GPIOControlServerRPI, GPIOPinNotSetupError
+from server import (  # noqa: F401
+    GPIOControlServerPicoW,
+    GPIOControlServerRPI,
+    GPIOPinNotSetupError,
+)

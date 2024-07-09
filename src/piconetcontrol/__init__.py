@@ -8,6 +8,6 @@ __long_description__ = """This packages provides two classes (`Client` and `Serv
 to manage a Raspberry Pi board (acting as server) via Wifi.
 
 The server is meant to be a Raspberrypi Pico W, but it is meant to also work on e.g.
-a Raspberrypi 4. Therefore, the `server.py` is compatible with both Python and MicroPython.
+a Raspberrypi 4. Therefore, the `server_base.py` is compatible with both Python and MicroPython.
 Some functionalities might not be available for both interpreters, though."""
 __url__ = "https://github.com/matthiaszeller/picoserver"

@@ -3,14 +3,15 @@ Client-side script for operating GPIO pins on the Rasperry Pi Pico W.
 Communication adheres to a defined communication protocol, see `README.md`.
 """
 
-import gc
+import asyncio
 import json
-import os
 import ssl
 
 # time.time() in micropython has no sub-second precision
 from time import sleep
 from time import time_ns as time
+
+import machine
 
 # micropython has no sleep_ms
 try:
@@ -57,21 +58,18 @@ def json_decorator(fun):
 
 class GPIOControlServerBase:
 
-    _VERSION = "1.10.0"
+    _VERSION = "1.11.0"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5
 
     def __init__(
         self,
-        path_wifi_credentials: str = None,
+        port: int,
         path_ssl_cert: str = None,
         path_ssl_key: str = None,
     ):
-        # server settings
-        with open(path_wifi_credentials, "r") as fh:
-            cfg = json.load(fh)
-        self.connection_port = cfg["port"]
+        self.connection_port = port
 
         assert (path_ssl_cert is None) == (
             path_ssl_key is None
@@ -303,150 +301,3 @@ class GPIOControlServerBase:
 
 class GPIOPinNotSetupError(RuntimeError):
     pass
-
-
-class GPIOControlServerPicoW(GPIOControlServerBase):
-
-    def __init__(self, use_ssl: bool = True):
-        self.led = machine.Pin("LED", machine.Pin.OUT)
-        super().__init__(use_ssl=use_ssl)
-        self.pins = dict()
-
-        with open("config/config_wlan.json", "r") as fh:
-            credentials = json.load(fh)
-
-        self.wlan_ssid = credentials["ssid"]
-        self.wlan_pwd = credentials["pwd"]
-
-    def configure_network(self):
-        wlan = network.WLAN(network.STA_IF)
-        if not wlan.isconnected():
-            wlan.active(True)
-            wlan.connect(self.wlan_ssid, self.wlan_pwd)
-
-            while not wlan.isconnected():
-                print("waiting for connection...")
-                self.blink_led(100, 3, 200)
-                sleep(1)
-
-    def led_on(self):
-        self.led.on()
-
-    def led_off(self):
-        self.led.off()
-
-    def __process_pin(self, pin: int, check_setup=True):
-        # attempt casting to int
-        try:
-            pin = int(pin)
-        except ValueError:
-            pass
-
-        if check_setup and pin not in self.pins:
-            raise GPIOPinNotSetupError(f"pin {pin} not setup")
-
-        return pin
-
-    def setup_pin(self, pin: int, mode):
-        mode = {"input": machine.Pin.IN, "output": machine.Pin.OUT}[mode]
-        pin = self.__process_pin(pin, check_setup=False)
-        self.pins[pin] = machine.Pin(pin, mode)
-
-    def write_pin(self, pin: int, value: int):
-        pin = self.__process_pin(pin)
-        self.pins[pin].value(value)
-
-    def read_pin(self, pin: int) -> int:
-        pin = self.__process_pin(pin)
-        return self.pins[pin].value()
-
-    def get_info(self) -> dict:
-        uname = os.uname()
-        return {
-            "mem_free": gc.mem_free(),
-            "mem_alloc": gc.mem_alloc(),
-            "micropython_version": uname.release,
-            "micropython_version_info": uname.version,
-            "board": uname.machine,
-        }
-
-    def sleep(self, time_ms: int, deep: bool):
-        # make sure board stops blinking
-        self._event_continuous_blink.clear()
-        self.led_off()
-
-        if deep:
-            print(f"deepsleeping for {time_ms} ms...")
-            machine.deepsleep(time_ms)
-        else:
-            print(f"lightsleeping for {time_ms} ms...")
-            machine.lightsleep(time_ms)
-
-        # to see the print appear, wait just a bit with time.sleep (software-based),
-        # or it might not show up (probably depends on how microcontroller handles prints
-        # when interrupts occur)
-        sleep(0.1)
-        print("woke up from sleep")
-        self._event_continuous_blink.set()
-
-    async def reset_after_timeout(self, soft: bool, timeout: float = 1.0):
-        await asyncio.sleep(timeout)
-        if soft:
-            print("soft resetting...")
-            machine.soft_reset()
-        else:
-            print("resetting...")
-            machine.reset()
-
-
-class GPIOControlServerRPI(GPIOControlServerBase):
-
-    GPIO_PIN_LED = 3
-
-    def configure_gpio(self):
-        GPIO.setmode(GPIO.BOARD)
-        # config LED
-        GPIO.setup(self.GPIO_PIN_LED, GPIO.OUT)
-        GPIO.output(self.GPIO_PIN_LED, 0)
-
-    def write_pin(self, pin: int, value: int):
-        GPIO.output(pin, value)
-
-    def setup_pin(self, pin: int, mode):
-        mode = {"input": GPIO.IN, "output": GPIO.OUT}[mode]
-        GPIO.setup(pin, mode)
-
-    def read_pin(self, pin: int) -> int:
-        return GPIO.input(pin)
-
-    def led_on(self):
-        self.write_pin(self.GPIO_PIN_LED, 1)
-
-    def led_off(self):
-        self.write_pin(self.GPIO_PIN_LED, 0)
-
-
-async def main(app: GPIOControlServerBase):
-    await app.run()
-
-
-if __name__ == "__main__":
-    if is_raspberrypi_pico():
-        import asyncio as asyncio
-
-        import machine
-        import network
-
-        app = GPIOControlServerPicoW()
-
-    else:
-        import asyncio
-
-        import RPi.GPIO as GPIO
-
-        app = GPIOControlServerRPI()
-
-    try:
-        asyncio.run(main(app))
-    finally:
-        app.cleanup()

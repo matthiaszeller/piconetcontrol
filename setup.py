@@ -47,5 +47,7 @@ setup(
         "Topic :: System :: Networking",
     ],
     # python_requires=">=3.11",
+    long_description=Path("README.rst").read_text(),
+    long_description_content_type="text/x-rst",
     **package_metadata,
 )

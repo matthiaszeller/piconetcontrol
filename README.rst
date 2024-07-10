@@ -1,5 +1,5 @@
 ==========
-picoserver
+piconetcontrol
 ==========
 
 
@@ -13,6 +13,12 @@ picoserver
 
 
 Client-server package to remotely control a Raspberrypi Pico W.
+
+This package has been tested and is known to work with the following versions:
+
+* **MicroPython**: v1.23.0
+* **Firmware**: v1.23.0 on 2024-06-02 (GNU 13.2.0 MinSizeRel)
+* **Python**: 3.11
 
 
 About

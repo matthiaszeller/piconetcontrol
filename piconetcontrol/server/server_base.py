@@ -74,7 +74,7 @@ def update_file(file_path: str, content: str):
 
 class GPIOControlServerBase:
 
-    _VERSION = "1.13.0"
+    _VERSION = "1.13.1"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5
@@ -181,10 +181,13 @@ class GPIOControlServerBase:
                 if data.endswith(b"\n"):
                     print("received data", buffer)
                     response = await self.handle_command(buffer.decode())
-                    writer.write(response.encode())
+                    buffer = bytearray()
+
+                    writer.write(response.encode() + b"\n")
                     await writer.drain()
-                    # exit loop after sending response
-                    break
+                    # double breakline indicates EOF, otherwise keep connection open
+                    if buffer.endswith(b"\n\n"):
+                        break
 
         finally:
             task_blink.cancel()

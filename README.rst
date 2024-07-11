@@ -1,6 +1,6 @@
-==========
+==============
 piconetcontrol
-==========
+==============
 
 
 .. image:: https://img.shields.io/pypi/v/piconetcontrol.svg
@@ -33,6 +33,13 @@ This enables using more powerful hardware for orchestration with greater functio
 as the server is executed with MicroPython on the Pico W.
 
 
+Security
+~~~~~~~~
+
+The current security model assumes the LAN is secure.
+mTLS might be later implemented (if even possible on the Pico W).
+
+
 Fail-Safe Mechanism
 ~~~~~~~~~~~~~~~~~~~
 
@@ -48,7 +55,7 @@ Installation
 Installation on PicoW
 ~~~~~~~~~~~~~~~~~~~~~
 
-**Copy Code**
+**Copy Code on Pico**
     Connect the Pico to your computer via the USB cable.
     Use e.g. Thonny IDE to copy the following files (under `piconetcontrol/server`) at the root of Pico filesystem:
 
@@ -59,7 +66,7 @@ Installation on PicoW
     Subsequent updates can be done via the client-server communication protocol (`Client.update_server()`).
 
 
-**Configuration files**
+**Configuration files on Pico**
     1. Create a `config/config_wlan.json` with fields `ssid` and `password` for the WiFi connection.
     2. Generate the certificate and copy it under `config/ec_cert.der` and `config/ec_key.pem`:
 
@@ -72,6 +79,44 @@ Installation on PicoW
 
 **Run Server**
     Run `main.py` from Thonny, or disconnect it and reconnect to a power source (`main.py` is executed on boot).
+    You shall see the LED blinking indicating the current status (see section below).
+
+**Configure Pico W IP Address**
+    It is recommended to reserve a static IP for the Pico W, see your router's documentation.
+    As of today, mDNS for using a hostname (instead of an IP) seems to not be supposed on Pico W.
+
+
+Example Usage
+~~~~~~~~~~~~~
+
+We show a simple example both the shell and in Python.
+
+.. code-block:: bash
+
+    $ python run_client.py 192.168.1.111 12345 -c action=setup_pin pin=2 mode=output value=0 \
+        -c action=read_pin pin=2 \
+        -c action=write_pin pin=2 value=1 timeout=5 \
+        -c action=read_pin pin=2
+    $ sleep 5 # wait for the write_pin timeout to expire
+    $ python run_client.py 192.168.1.111 12345 -c action=read_pin pin=2
+
+.. code-block:: python
+
+    from time import sleep
+    from piconetcontrol.client import Client
+
+    client = Client('192.168.1.111', 12345)
+    client.send_commands([
+        {"action": "setup_pin", "pin": 2, "mode": "output", "value": 0},
+        {"action": "read_pin", "pin": 2},
+        {"action": "write_pin", "pin": 2, "value": 1, "timeout": 5},
+        {"action": "read_pin", "pin": 2},
+    ])
+    # wait for the write_pin timeout to expire
+    sleep(5)
+    client.send_commands([
+        {"action": "read_pin", "pin": 2},
+    ])
 
 
 Server Blinking Patterns

@@ -104,6 +104,11 @@ Client-Server Communication Protocol
 
 The server and the Raspberry Pi Pico W (client) communicate over a TCP/IP connection.
 Message exchange occurs via *JSON-encoded dictionaries*.
+Multiple instructions can be sent through a single connection,
+a `\n` EOF signal is used to indicate the end of a command.
+This enables sending long messages more than 1024 bytes (the buffer size).
+The client sends a `\n\n` EOF signal to indicate no more commands are to be sent,
+following what the server will close the connection.
 
 
 Commands

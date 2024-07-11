@@ -2,34 +2,27 @@
 Server-side script for automatic plant watering system.
 """
 
-import argparse
 import json
 import logging
 import socket
 import ssl
 import time
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any, Callable
 
-from update import get_local_version, get_update_files
+from .update import get_local_version, get_update_files
 
 
 class Client:
 
-    VERSION = "1.5.1"
+    VERSION = "1.6.0"
 
     CMD_TYPE = dict[str, Any]
 
-    def __init__(self, path_config: str | Path = None, use_ssl: bool = True):
-        if path_config is None:
-            path_config = Path("config") / "config_connection.json"
+    def __init__(self, host: str, port: int, use_ssl: bool = True):
+        self.host = host
+        self.port = port
 
-        with open(path_config) as fh:
-            config = json.load(fh)
-
-        self.client = config["client_address"]
-        self.port = config["port"]
         if use_ssl:
             self.ssl_context = ssl.create_default_context()
             self.ssl_context.check_hostname = False
@@ -39,7 +32,7 @@ class Client:
 
     @contextmanager
     def _create_socket(self):
-        with socket.create_connection((self.client, self.port)) as sock:
+        with socket.create_connection((self.host, self.port)) as sock:
             if self.ssl_context:
                 with self.ssl_context.wrap_socket(sock) as ss:
                     yield ss
@@ -205,84 +198,3 @@ class Client:
             return
 
         print("Server updated successfully")
-
-
-def main(args):
-    use_ssl = not args.no_ssl
-    client = Client(use_ssl=use_ssl)
-
-    assert not (args.command and args.file), "Cannot send both a command and a file"
-
-    if args.update:
-        client.update_server()
-        return
-
-    if args.command:
-        res = client.send_commands(args.command, timeout=args.timeout)
-    elif args.file:
-        with args.file as f:
-            commands = json.load(f)
-        res = client.send_commands(commands, timeout=args.timeout)
-    else:
-        res = client.send_ping()
-
-    print("Response:")
-    print(json.dumps(res, indent=2))
-
-
-class KwargsAppendAction(argparse.Action):
-    """
-    Argparse action to split an argument into KEY=VALUE form
-    on append to a list of dictionaries.
-    """
-
-    def __call__(self, parser, args, values, option_string=None):
-        try:
-            d = dict(map(lambda x: x.split("="), values))
-        except ValueError:
-            raise argparse.ArgumentError(
-                self, f'Could not parse argument "{values}" as k1=v1 k2=v2 ... format'
-            )
-
-        if getattr(args, self.dest) is None:
-            setattr(args, self.dest, [])
-
-        getattr(args, self.dest).append(d)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--no-ssl",
-        action="store_true",
-    )
-    parser.add_argument(
-        "-c",
-        "--command",
-        nargs="*",
-        required=False,
-        action=KwargsAppendAction,
-        metavar="KEY=VALUE",
-        help="Command set to server. If not sent, sends a ping",
-    )
-    parser.add_argument(
-        "-f",
-        "--file",
-        type=argparse.FileType("r"),
-        help="File containing commands to send to the server",
-        required=False,
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=3.0,
-        help="TCP socket timeout in seconds (for each command)",
-    )
-    parser.add_argument(
-        "--update",
-        action="store_true",
-        help="Update server and ignore other arguments",
-    )
-    args = parser.parse_args()
-    print(args)
-    main(args)

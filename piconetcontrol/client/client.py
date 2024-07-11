@@ -17,7 +17,7 @@ from update import get_local_version, get_update_files
 
 class Client:
 
-    VERSION = "1.5.0"
+    VERSION = "1.5.1"
 
     CMD_TYPE = dict[str, Any]
 
@@ -52,14 +52,16 @@ class Client:
         command: CMD_TYPE,
         raise_exception: bool = False,
         timeout: float = 3.0,
+        signal_eof_to_server: bool = True,
     ) -> CMD_TYPE:
+        EOF = "\n\n" if signal_eof_to_server else "\n"
         try:
             # renew timeout for each command
             sock.settimeout(timeout)
 
             command["time_sent"] = time.time_ns()
             # Add linebreak to signify end of data packet
-            command = json.dumps(command) + "\n"
+            command = json.dumps(command) + EOF
             logging.debug(f"sending command {command}")
             sock.sendall(command.encode())
             response = self._receive_response(sock, raise_exception)
@@ -82,6 +84,8 @@ class Client:
                 break
 
             buffer.extend(data)
+            if buffer.endswith(b"\n"):
+                break
 
         response = json.loads(buffer.decode())
         response["time_responded"] = time.time_ns()
@@ -102,9 +106,10 @@ class Client:
         responses = []
         with self._create_socket() as sock:
             # logging.debug(f'connected to {self.client} on port {self.port}')
-            for command in cmds:
+            for i, command in enumerate(cmds):
+                signal_eof_to_server = i == len(cmds) - 1
                 response = self._send_single_command(
-                    sock, command, raise_exception, timeout
+                    sock, command, raise_exception, timeout, signal_eof_to_server
                 )
                 responses.append(response)
 

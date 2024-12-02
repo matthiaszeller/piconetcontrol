@@ -49,5 +49,10 @@ setup(
     python_requires=">=3.11,<4",
     long_description=Path("README.rst").read_text(),
     long_description_content_type="text/x-rst",
+    entry_points={
+        'console_scripts': [
+            'piconetcontrol=piconetcontrol.__main__:main',
+        ]
+    },
     **package_metadata,
 )

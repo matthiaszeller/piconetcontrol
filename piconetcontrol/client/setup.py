@@ -7,6 +7,11 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 import sys
 import json
 from time import sleep
+import pyudev
+import re
+from urllib.request import urlopen
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
 
 from simple_term_menu import TerminalMenu
 
@@ -17,6 +22,8 @@ PATH_MICROPYTHON_UTILS = PATH_SERVER_CODE / 'utils'
 FILE_TEST_WIFI = PATH_MICROPYTHON_UTILS / 'test_wifi.py'
 FILE_WIPE_ROOT = PATH_MICROPYTHON_UTILS / 'wipe_root.py'
 FILE_GEN_SSH = Path(__file__).with_name('gen_ssl.sh')
+REGEX_VERSION = re.compile(r'v(\d+\.\d+\.\d+)')
+URL_FIRMWARE = 'https://micropython.org/download/RPI_PICO_W/'
 
 
 def run_command(cmd: str, cwd: str = None):
@@ -28,6 +35,46 @@ def run_command(cmd: str, cwd: str = None):
     )
 
 
+def fetch_available_firmwares() -> list[tuple[str, str]]:
+    soup = BeautifulSoup(
+        urlopen(URL_FIRMWARE).read(),
+        'html.parser'
+    )
+    versions = soup.select('div a[href$=".uf2"]')
+    if not versions:
+        raise RuntimeError(f'could not parse {URL_FIRMWARE}')
+    
+    out = []
+    for tag in versions:
+        text = tag.text.removesuffix('.uf2').strip()
+        version = REGEX_VERSION.search(text).groups(1)[0]
+        url = urljoin(URL_FIRMWARE, tag.attrs['href'])
+        out.append((version, text, url))
+
+    return out
+
+
+def detect_bootloader_mode() -> str | None:
+    context = pyudev.Context()
+    for device in context.list_devices(subsystem='block', DEVTYPE='disk'):
+        if 'RPI_RP2' in device.properties.get('ID_USB_SERIAL', ''):
+            return device.device_node
+        
+    return None
+
+
+def install_firmware(download_url: str, device_path: str):
+    with NamedTemporaryFile('wb') as file:
+        # download
+        data = urlopen(download_url).read()
+        file.write(data)
+        file.seek(0)
+        # copy file to bootloader
+        run_command(
+            f'sudo dd if={file.name} of={device_path} bs=512 status=progress'
+        )   
+
+
 def show_menu(options: list[str], title: str = None) -> int:
     return TerminalMenu(
         options, 
@@ -35,6 +82,27 @@ def show_menu(options: list[str], title: str = None) -> int:
         raise_error_on_interrupt=True,
         title=title
     ).show()
+
+
+def mp_list_devices() -> list[str]:
+    output = run_command('mpremote devs').strip()
+    if not output:
+        return []
+    
+    return [
+        line.split()[0]
+        for line in output.split('\n')
+    ]
+
+
+def mp_get_version() -> str:
+    out = run_command('mpremote exec "import sys; print(sys.version)"')
+    version = REGEX_VERSION.search(out)
+
+    if not version:
+        raise RuntimeError('could not detect version')
+    
+    return version.groups(1)[0]
 
 
 def mp_mkdir(folder: str):
@@ -92,22 +160,61 @@ def setup_ssl():
 
 
 def main():
-    # Ensure found devices
-    devices = run_command('mpremote devs').strip().split('\n')
-    if not devices:
-        raise RuntimeError('no micropython device found')
+    # Figure out connected device with vs without installed firmware
+    bootloader_device = detect_bootloader_mode()
+    devices = mp_list_devices()
+
+    if not bootloader_device and not devices:
+        print('No pico device detected')
+        return
     elif len(devices) > 1:
         # if more than one device, would need to specify which device to run with `mpremote`,
         # the whole script would require refacoring
         raise NotImplementedError('more than one micropython device found')
+    
+    firmwares = fetch_available_firmwares()
+    do_install_firmware = True
+    
+    if bootloader_device:
+        print('picoW detected in booloader mode:', bootloader_device)
+        print('Either firmware is not installed, or you pressed bootsel button')
+    
+    else:
+        devname = devices[0].split()[0]
+        version = mp_get_version()
+        print(f'Device found on {devname} with version {version}')
+        print(f'Latest available firmware version: {firmwares[0][0]}')
 
-    devname = devices[0].split()[0]
-    print('detected device', devname)
+        idx = show_menu(
+            ['Yes', 'No'],
+            title='Do you want to install another firmware version?'
+        )
+        if idx == 1:
+            do_install_firmware = False
+        else:
+            # put device in bootloader mode
+            run_command(f'mpremote bootloader')
+            bootloader_device = detect_bootloader_mode()
+            sleep(2)
+            print(f'put device in bootloader mode, available at {bootloader_device}')
+
+    # Install firmware
+    if do_install_firmware:
+        idx = show_menu(
+            [e[1] for e in firmwares],
+            title='Select the firmware version to download and install'
+        )
+        firmware_url = firmwares[idx][2]
+        install_firmware(firmware_url, bootloader_device)
+        sleep(2)
+        devices = mp_list_devices()
+        assert len(devices) == 1, f'expected 1 pico W device after firmware installation, found {len(devices)}'
+        print(f'New firmware version: {mp_get_version()}')
     
     # Warn user
     idx = show_menu(
         ['Yes', 'No'],
-        title='Running this script will reset the device. Are you sure you wanna continue?'
+        title="Running this script will wipe the device's filesystem. Are you sure you wanna continue?"
     )
     if idx != 0:
         return
@@ -150,7 +257,3 @@ def main():
 
     # Reset to run the server
     run_command(f'mpremote reset')
-
-
-if __name__ == '__main__':
-    main()

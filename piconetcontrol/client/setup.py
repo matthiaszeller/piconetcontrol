@@ -12,7 +12,9 @@ import re
 from urllib.request import urlopen
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+from colorama import Fore, Style
 
+from piconetcontrol.utils import logger
 from simple_term_menu import TerminalMenu
 
 FILE_WIFI = 'config/config_wlan.json'
@@ -27,7 +29,7 @@ URL_FIRMWARE = 'https://micropython.org/download/RPI_PICO_W/'
 
 
 def run_command(cmd: str, cwd: str = None):
-    print('running', cmd)
+    logger.debug(f'running command `{cmd}`')
     return subprocess.check_output(
         shlex.split(cmd),
         text=True,
@@ -35,7 +37,8 @@ def run_command(cmd: str, cwd: str = None):
     )
 
 
-def fetch_available_firmwares() -> list[tuple[str, str]]:
+def fetch_available_firmwares() -> list[tuple[str, str, str]]:
+    """Fetch online the list of firmware versions for PicoW"""
     soup = BeautifulSoup(
         urlopen(URL_FIRMWARE).read(),
         'html.parser'
@@ -122,7 +125,7 @@ def mp_file_exists(file: str) -> bool:
 
 def mp_test_wifi() -> bool:
     output = run_command(f'mpremote run {FILE_TEST_WIFI}').strip()
-    print('result of wifi test:', output)
+    logger.debug('result of wifi test:', output)
     return output == 'True'
 
 
@@ -165,7 +168,7 @@ def main():
     devices = mp_list_devices()
 
     if not bootloader_device and not devices:
-        print('No pico device detected')
+        logger.error('No pico device detected')
         return
     elif len(devices) > 1:
         # if more than one device, would need to specify which device to run with `mpremote`,
@@ -176,14 +179,14 @@ def main():
     do_install_firmware = True
     
     if bootloader_device:
-        print('picoW detected in booloader mode:', bootloader_device)
-        print('Either firmware is not installed, or you pressed bootsel button')
+        logger.info(f'picoW detected in {Fore.BLUE}booloader mode{Style.RESET_ALL}: {bootloader_device}')
+        logger.info('Either firmware is not installed, or you pressed bootsel button')
     
     else:
         devname = devices[0].split()[0]
         version = mp_get_version()
-        print(f'Device found on {devname} with version {version}')
-        print(f'Latest available firmware version: {firmwares[0][0]}')
+        logger.info(f'Device found on {devname} with version {version}')
+        logger.warning(f'Latest available firmware version: {firmwares[0][0]}')
 
         idx = show_menu(
             ['Yes', 'No'],
@@ -196,7 +199,7 @@ def main():
             run_command(f'mpremote bootloader')
             bootloader_device = detect_bootloader_mode()
             sleep(2)
-            print(f'put device in bootloader mode, available at {bootloader_device}')
+            logger.info(f'put device in bootloader mode, available at {bootloader_device}')
 
     # Install firmware
     if do_install_firmware:
@@ -209,30 +212,31 @@ def main():
         sleep(2)
         devices = mp_list_devices()
         assert len(devices) == 1, f'expected 1 pico W device after firmware installation, found {len(devices)}'
-        print(f'New firmware version: {mp_get_version()}')
+        logger.info(f'New firmware version: {mp_get_version()}')
     
     # Warn user
+    logger.warning("Running this script will wipe the device's filesystem.")
     idx = show_menu(
         ['Yes', 'No'],
-        title="Running this script will wipe the device's filesystem. Are you sure you wanna continue?"
+        title="Are you sure you wanna continue?"
     )
     if idx != 0:
         return
 
     # Clear filesystem
-    print('wiping out microcontroller filesystem ...')
+    logger.info('wiping out microcontroller filesystem ...')
     run_command(f'mpremote run {FILE_WIPE_ROOT}')
 
     # Reset board
     # WARNING: this might prevent a bug when connecting to a WiFi with a wrong password,
     #          where `wlan.isconnected` is True if the board connected to the same Wifi 
     #          with correct password
-    print('Resetting the board ...')
+    logger.info('Resetting the board ...')
     run_command('mpremote reset')
     sleep(1)  # give some time for reset
 
     # Wifi
-    print('Setting up Wifi ...')
+    logger.info('Setting up Wifi ...')
     mp_mkdir('config')
 
     while True:
@@ -240,16 +244,16 @@ def main():
         wifi_cfg = json.dumps({'ssid': ssid, 'pwd': pwd}, indent=2)
         mp_write_string(wifi_cfg, FILE_WIFI)
 
-        print('Attempting connection ...')
+        logger.info('Attempting connection ...')
         if mp_test_wifi():
             break
 
-        print('Connection failed. Try again.')
+        logger.info('Connection failed. Try again.')
     
-    print('Connection sucessfull')
+    logger.info('Connection sucessfull')
 
     # Copy python files
-    print('Setting up server files ...')
+    logger.info('Setting up server files ...')
     for file in ('main.py', 'server_base.py', 'server_pico.py'):
         run_command(f'mpremote fs cp {PATH_SERVER_CODE / file} :{file}')
     

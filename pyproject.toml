@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "piconetcontrol"
-version = "0.2.4"
+version = "0.3.0"
 description = "Client-server package to remotely control a Raspberrypi Pi Pico W."
 authors = ["Matthias Zeller <matthias.gilles.zeller@gmail.com>"]
 license = "MIT"

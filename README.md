@@ -11,20 +11,20 @@ Client-server package to remotely control a Raspberry Pi Pico W.
 This package provides a client-server architecture to remotely control a Raspberry Pi Pico W.
 The *server* runs on the Pico W, handling direct hardware interaction, while the *client* runs on e.g. a Raspberrypi.
 
-This design allows for lightweight "agents" (Pico W devices) 
-to perform hardware-specific tasks, while the raspberrypi handles centralized orcheastration and higher-order logic. 
+This design allows for lightweight "agents" (Pico W devices)
+to perform hardware-specific tasks, while the raspberrypi handles centralized orcheastration and higher-order logic.
 
 For testing/debugging purposes, the *server* can also run on the raspberrypi itself.
 
 
 ### Security
 
-The current security model assumes the LAN is secure.  
+The current security model assumes the LAN is secure.
 mTLS might be implemented later (if even possible on the Pico W).
 
 ### Fail-Safe Mechanism
 
-To handle scenarios where the client-server connection is disrupted after an actuator has been activated, changing a pin state (`write_pin` command) requires a timeout to be specified.  
+To handle scenarios where the client-server connection is disrupted after an actuator has been activated, changing a pin state (`write_pin` command) requires a timeout to be specified.
 After the timeout, the server will revert the pin state to its previous value.
 Initial pin state must be set upon pin setup (`setup_pin` command).
 

@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 import sys
 import json
 from time import sleep
+import polling2
 import pyudev
 import re
 from urllib.request import urlopen
@@ -125,7 +126,6 @@ def mp_file_exists(file: str) -> bool:
 
 def mp_test_wifi() -> bool:
     output = run_command(f'mpremote run {FILE_TEST_WIFI}').strip()
-    logger.debug('result of wifi test:', output)
     return output == 'True'
 
 
@@ -197,8 +197,12 @@ def main():
         else:
             # put device in bootloader mode
             run_command(f'mpremote bootloader')
-            bootloader_device = detect_bootloader_mode()
-            sleep(2)
+            # poll until bootloader mode detected
+            bootloader_device = polling2.poll(
+                detect_bootloader_mode,
+                max_tries=5,
+                step=1.5,
+            )
             logger.info(f'put device in bootloader mode, available at {bootloader_device}')
 
     # Install firmware
@@ -209,8 +213,13 @@ def main():
         )
         firmware_url = firmwares[idx][2]
         install_firmware(firmware_url, bootloader_device)
-        sleep(2)
-        devices = mp_list_devices()
+        logger.info('finished installing firmware')
+        # poll until device detectable
+        devices = polling2.poll(
+            mp_list_devices,
+            max_tries=6,
+            step=2
+        )
         assert len(devices) == 1, f'expected 1 pico W device after firmware installation, found {len(devices)}'
         logger.info(f'New firmware version: {mp_get_version()}')
     
@@ -233,7 +242,12 @@ def main():
     #          with correct password
     logger.info('Resetting the board ...')
     run_command('mpremote reset')
-    sleep(1)  # give some time for reset
+    devices = polling2.poll(
+        mp_list_devices,
+        max_tries=5,
+        step=1
+    )
+    assert len(devices) == 1, f'expected 1 device, found {len(devices)}'
 
     # Wifi
     logger.info('Setting up Wifi ...')
@@ -260,4 +274,5 @@ def main():
     setup_ssl()
 
     # Reset to run the server
+    logger.info('Hard-resetting the board to run the server...')
     run_command(f'mpremote reset')

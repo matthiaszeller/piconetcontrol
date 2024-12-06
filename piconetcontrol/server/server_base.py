@@ -74,7 +74,7 @@ def update_file(file_path: str, content: str):
 
 class GPIOControlServerBase:
 
-    _VERSION = "1.13.1"
+    _VERSION = "1.13.2"
 
     _IDLING_BLINK_DURATION = 1.5
     _IDLING_BLINK_DT = 1.5
@@ -210,6 +210,9 @@ class GPIOControlServerBase:
         pass
 
     def read_pin(self, pin: int) -> int:
+        pass
+
+    def get_mac() -> str:
         pass
 
     def get_info(self) -> dict:

@@ -8,7 +8,7 @@ import machine
 import network
 from deflate import DeflateIO
 from server_base import GPIOControlServerBase, GPIOPinNotSetupError
-from ubinascii import a2b_base64
+from ubinascii import a2b_base64, hexlify
 
 
 class GPIOControlServerPicoW(GPIOControlServerBase):
@@ -76,6 +76,11 @@ class GPIOControlServerPicoW(GPIOControlServerBase):
         pin = self.__process_pin(pin)
         return self.pins[pin].value()
 
+    def get_mac(self) -> str:
+        wlan = network.WLAN(network.STA_IF)
+        mac = wlan.config("mac")
+        return hexlify(mac).decode()
+
     def get_info(self) -> dict:
         uname = os.uname()
         return {
@@ -84,6 +89,7 @@ class GPIOControlServerPicoW(GPIOControlServerBase):
             "micropython_version": uname.release,
             "micropython_version_info": uname.version,
             "board": uname.machine,
+            "mac_address": self.get_mac(),
         }
 
     def sleep(self, time_ms: int, deep: bool):

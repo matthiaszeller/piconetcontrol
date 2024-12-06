@@ -52,38 +52,30 @@ Initial pin state must be set upon pin setup (`setup_pin` command).
 Installation
 ------------
 
-Installation on PicoW
+Install the package with `pip`:
+```shell
+pip install piconetcontrol
+```
+
+Setup the PicoW
 ~~~~~~~~~~~~~~~~~~~~~
 
-**Copy Code on Pico**
-    Connect the Pico to your computer via the USB cable.
-    Use e.g. Thonny IDE to copy the following files (under `piconetcontrol/server`) at the root of Pico filesystem:
+1. Install MicroPython Firmware by following the official [documentation](https://projects.raspberrypi.org/en/projects/get-started-pico-w/1)
+2. Connect the PicoW to your device
+3. Run the setup CLI and follow the prompt:
+```shell
+piconetcontrol setup
+```
+    * This will connect the board to WiFi, generate SSL certificates and necessary files to run the server
 
-    * `main.py`
-    * `server_base.py`
-    * `server_pico.py`
-
-    Subsequent updates can be done via the client-server communication protocol (`Client.update_server()`).
+Verify successful setup by checking the onboard LED's blinking patterns (see details below).
 
 
-**Configuration files on Pico**
-    1. Create a `config/config_wlan.json` with fields `ssid` and `password` for the WiFi connection.
-    2. Generate the certificate and copy it under `config/ec_cert.der` and `config/ec_key.pem`:
+Static Address and IP Reservation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    .. code-block:: bash
-
-        openssl ecparam -genkey -name prime256v1 -out ec_key.pem
-        openssl ec -in ec_key.pem -outform DER -out ec_key.der
-        openssl req -new -key ec_key.pem -out ec_csr.pem
-        openssl x509 -in ec_cert.pem -outform DER -out ec_cert.der
-
-**Run Server**
-    Run `main.py` from Thonny, or disconnect it and reconnect to a power source (`main.py` is executed on boot).
-    You shall see the LED blinking indicating the current status (see section below).
-
-**Configure Pico W IP Address**
-    It is recommended to reserve a static IP for the Pico W, see your router's documentation.
-    As of today, mDNS for using a hostname (instead of an IP) seems to not be supposed on Pico W.
+It is recommended to reserve a static IP for the Pico W, see your router's documentation.
+As of today, mDNS for using a hostname (instead of an IP) seems to not be supposed on Pico W.
 
 
 Example Usage
